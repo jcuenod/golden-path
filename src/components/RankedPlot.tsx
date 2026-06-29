@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { naturalBreak } from "../model/rank";
+import { topClusterCount } from "../model/rank";
 import type { RankedBook } from "../model/types";
 
 interface Props {
@@ -78,7 +78,7 @@ export function RankedPlot({
     );
   }
 
-  const breakCount = naturalBreak(ranked);
+  const breakCount = topClusterCount(ranked);
   const shownCount = expanded ? ranked.length : Math.min(collapsedCount, ranked.length);
   const shown = ranked.slice(0, shownCount);
 

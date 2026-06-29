@@ -63,21 +63,49 @@ export function rankCandidates(
 }
 
 /**
- * Natural-break ("largest gap") cutoff over a ranked list: the number of books
- * before the biggest score drop among the leading positions. Used to highlight
- * the recommended cluster rather than a fixed top-3.
+ * Size of the leading "top cluster" via Otsu's method (maximize between-class
+ * variance ≡ minimize within-class variance) applied to the *top window* of
+ * scores.
+ *
+ * Otsu over the whole candidate set is the wrong tool: the score distribution is
+ * roughly unimodal, so the best 2-way split lands near the median (≈half the
+ * books "above the line"). Restricting Otsu to the strongest `windowSize`
+ * candidates gives it the next tier to contrast against, so it cleanly separates
+ * the genuine top cluster (e.g. Luke → the three Gospels) from the rest.
+ *
+ * Returns the count of books in the high-score class (≥ 1). For an essentially
+ * flat window (no real separation) it returns `ranked.length`, so the caller
+ * draws no divider.
  */
-export function naturalBreak(ranked: RankedBook[], maxCount = 6): number {
-  if (ranked.length <= 1) return ranked.length;
-  const limit = Math.min(maxCount, ranked.length - 1);
-  let best = 1;
-  let bestGap = -Infinity;
-  for (let i = 1; i <= limit; i++) {
-    const gap = ranked[i - 1].predictedZ - ranked[i].predictedZ;
-    if (gap > bestGap) {
-      bestGap = gap;
-      best = i;
+export function topClusterCount(ranked: RankedBook[], windowSize = 12): number {
+  const n = ranked.length;
+  if (n <= 1) return n;
+  const k = Math.min(windowSize, n);
+
+  // ascending scores of the top-k candidates (ranked is already sorted desc)
+  const xs = ranked
+    .slice(0, k)
+    .map((r) => r.predictedZ)
+    .sort((a, b) => a - b);
+  const prefix = [0];
+  for (const v of xs) prefix.push(prefix[prefix.length - 1] + v);
+  const total = prefix[k];
+
+  let bestSplit = 0;
+  let bestVar = -Infinity;
+  for (let i = 1; i < k; i++) {
+    // lower class = xs[0..i), upper class = xs[i..k)
+    const w0 = i / k;
+    const w1 = 1 - w0;
+    const mu0 = prefix[i] / i;
+    const mu1 = (total - prefix[i]) / (k - i);
+    const between = w0 * w1 * (mu0 - mu1) ** 2;
+    if (between > bestVar) {
+      bestVar = between;
+      bestSplit = i;
     }
   }
-  return best;
+
+  if (bestVar <= 1e-12) return n; // flat window → no meaningful cluster
+  return k - bestSplit; // size of the upper (high-score) class
 }

@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/BookSelector.tsx","./src/components/RankedPlot.tsx","./src/model/features.ts","./src/model/gbm.ts","./src/model/loadModel.ts","./src/model/model.test.ts","./src/model/rank.ts","./src/model/types.ts"],"errors":true,"version":"5.9.3"}

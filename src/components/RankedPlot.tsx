@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { topClusterCount } from "../model/rank";
+import { fitPercentile, naturalBreak } from "../model/rank";
 import type { RankedBook } from "../model/types";
 
 interface Props {
@@ -12,19 +12,6 @@ interface Props {
 }
 
 const SPRING = { type: "spring" as const, stiffness: 320, damping: 34, mass: 0.9 };
-
-// erf -> normal CDF, to back each bar with a 0..100 relative-fit percentile on hover.
-function fitPercentile(z: number): number {
-  const sign = z < 0 ? -1 : 1;
-  const x = Math.abs(z) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * x);
-  const y =
-    1 -
-    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
-      t *
-      Math.exp(-x * x);
-  return Math.round(50 * (1 + sign * y));
-}
 
 export function RankedPlot({
   ranked,
@@ -78,7 +65,7 @@ export function RankedPlot({
     );
   }
 
-  const breakCount = topClusterCount(ranked);
+  const breakCount = naturalBreak(ranked);
   const shownCount = expanded ? ranked.length : Math.min(collapsedCount, ranked.length);
   const shown = ranked.slice(0, shownCount);
 

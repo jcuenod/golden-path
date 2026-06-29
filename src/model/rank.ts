@@ -62,50 +62,47 @@ export function rankCandidates(
   return ranked;
 }
 
+// Abramowitz-Stegun erf (max error ~1.5e-7) → normal CDF, mapped to a 0..100
+// "relative fit" percentile. This is the number shown on each bar, and the
+// quantity the cluster cut-off is computed on, so the divider lines up with the
+// figures the user sees.
+function normalCdf(z: number): number {
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+
+export function fitPercentile(withinPoolZ: number): number {
+  return Math.round(100 * normalCdf(withinPoolZ));
+}
+
 /**
- * Size of the leading "top cluster" via Otsu's method (maximize between-class
- * variance ≡ minimize within-class variance) applied to the *top window* of
- * scores.
+ * Leading-cluster cut-off: the number of books before the largest drop in
+ * relative fit among the top `cap` positions.
  *
- * Otsu over the whole candidate set is the wrong tool: the score distribution is
- * roughly unimodal, so the best 2-way split lands near the median (≈half the
- * books "above the line"). Restricting Otsu to the strongest `windowSize`
- * candidates gives it the next tier to contrast against, so it cleanly separates
- * the genuine top cluster (e.g. Luke → the three Gospels) from the rest.
- *
- * Returns the count of books in the high-score class (≥ 1). For an essentially
- * flat window (no real separation) it returns `ranked.length`, so the caller
- * draws no divider.
+ * Computed on the displayed fit percentile (not the raw z) so the cut matches
+ * the numbers on the bars — a tier like "…88" that then drops to "79" cuts
+ * after the 88. `cap` keeps the recommended set a tight shortlist; ties resolve
+ * to the earlier (more restrictive) cut.
  */
-export function topClusterCount(ranked: RankedBook[], windowSize = 12): number {
+export function naturalBreak(ranked: RankedBook[], cap = 5): number {
   const n = ranked.length;
   if (n <= 1) return n;
-  const k = Math.min(windowSize, n);
-
-  // ascending scores of the top-k candidates (ranked is already sorted desc)
-  const xs = ranked
-    .slice(0, k)
-    .map((r) => r.predictedZ)
-    .sort((a, b) => a - b);
-  const prefix = [0];
-  for (const v of xs) prefix.push(prefix[prefix.length - 1] + v);
-  const total = prefix[k];
-
-  let bestSplit = 0;
-  let bestVar = -Infinity;
-  for (let i = 1; i < k; i++) {
-    // lower class = xs[0..i), upper class = xs[i..k)
-    const w0 = i / k;
-    const w1 = 1 - w0;
-    const mu0 = prefix[i] / i;
-    const mu1 = (total - prefix[i]) / (k - i);
-    const between = w0 * w1 * (mu0 - mu1) ** 2;
-    if (between > bestVar) {
-      bestVar = between;
-      bestSplit = i;
+  const limit = Math.min(cap, n - 1);
+  let best = 1;
+  let bestGap = -Infinity;
+  for (let i = 1; i <= limit; i++) {
+    const gap = fitPercentile(ranked[i - 1].withinPoolZ) - fitPercentile(ranked[i].withinPoolZ);
+    if (gap > bestGap) {
+      bestGap = gap;
+      best = i;
     }
   }
-
-  if (bestVar <= 1e-12) return n; // flat window → no meaningful cluster
-  return k - bestSplit; // size of the upper (high-score) class
+  return best;
 }
